@@ -26,8 +26,8 @@ output:
 ## Submission Steps (10 pts)
 1. This problem set is a paired problem set.
 2. Play paper, scissors, rock to determine who goes first. Call that person *Partner 1*.
-    - Partner 1 (name and cnet ID):
-    - Partner 2 (name and cnet ID):
+    - Partner 1: Mithila Iyer (CNET ID: 12414493)
+    - Partner 2: Sumner Perera (CNET ID: 12403312)
 3. Partner 1 will accept the `ps5` and then share the link it creates with their partner. You can only share it with one partner so you will not be able to change it after your partner has accepted. 
 4. "This submission is our work alone and complies with the 30538 integrity policy." Add your initials to indicate your agreement: \*\*\_\_\*\* \*\*\_\_\*\*
 5. "I have uploaded the names of anyone else other than my partner and I worked with on the problem set **[here](https://docs.google.com/forms/d/185usrCREQaUbvAXpWhChkjghdGgmAZXA3lPWpXLLsts/edit)**"  (1 point)
@@ -44,6 +44,7 @@ output:
 import pandas as pd
 import altair as alt
 import time
+from bs4 import BeautifulSoup
 
 import warnings 
 warnings.filterwarnings('ignore')
@@ -55,15 +56,124 @@ alt.renderers.enable("png")
 
 ### 1. Scraping (PARTNER 1)
 
-```{python}
+# 1. Extracts and saves HTML code as a parseable object
 
+```{python}
+#Loading in the Enforcement Actions webpage
+url = 'https://oig.hhs.gov/fraud/enforcement/'
+response = requests.get(url)
+soup = BeautifulSoup(response.text, 'lxml')
+#We want to find the titles, dates, categories, and links. Lets look at how many there are of each (we actually should know this as the first page lists 20)
+
+#Titles these are under <a> tags in the <h2> tag with class 'usa-card__heading'. First we find h2 tags
+h2_tags = soup.find_all('h2', class_='usa-card__heading')
+
+#Then we filter these tags to find the <a> tags and the text within that we need with a loop
+titles = [
+    a_tag.get_text(strip=True)  
+    for h2 in h2_tags  
+    for a_tag in h2.find_all('a', href=True) 
+    if a_tag['href'].startswith('/')  
+]
+
+#Print the # of filtered titles
+print(len(titles))
+#We have 20 titles - this seems to be on the right track!
+
+#Dates
+div_tags = soup.find_all('div', class_='font-body-sm margin-top-1')
+
+#Extracting the text we need from sub-tags with a loop
+dates = [
+    span.get_text(strip=True)  
+    for div in div_tags  
+    for span in div.find_all('span', class_='text-base-dark') 
+]
+
+#Printing # of filtered dates
+print(len(dates))
+
+#Categories 
+ul_tags = soup.find_all('ul', class_='display-inline add-list-reset')
+#Extracting the text we need from sub-tags with a loop
+categories = [
+    li.get_text(strip=True)
+    for ul in ul_tags 
+    for li in ul.find_all('li', class_='usa-tag')
+]
+#Printing categories for each instance
+print(len(categories))
+
+#Links
+#Importing url joiner package and setting base url for complete links
+from urllib.parse import urljoin
+base_url = 'https://oig.hhs.gov'
+
+h2_tags = soup.find_all('h2', class_='usa-card__heading')
+
+#Extracting full links using a loop
+full_links = [
+    urljoin(base_url, a_tag['href']) 
+    for h2 in h2_tags 
+    for a_tag in h2.find_all('a', href=True) 
+]
+
+#Printing the number of full links found
+print(len(full_links))
+
+#Creating dataframe
+scraped_data = {'Title': titles, 'Date': dates, 'Category': categories, 'Link': full_links}
+scraped_data = pd.DataFrame(scraped_data)
+
+#Printing the head
+print(scraped_data.head())
+
+#Source: ChatGPT for extracting all titles, links, etc using a loop, and for looking up how to include entire links using urljoin
 ```
 
-  
+
 ### 2. Crawling (PARTNER 1)
 
 ```{python}
+#First we need to get the list of relative links from the main page and store the content in a soup object 
+main = 'https://oig.hhs.gov/fraud/enforcement/'
+response = requests.get(main)
+soup = BeautifulSoup(response.content, 'html.parser')
 
+#Extracting all the complete links
+full_links = [
+    urljoin(base_url, a_tag['href'])
+    for h2 in soup.find_all('h2', class_='usa-card__heading')
+    for a_tag in h2.find_all('a', href=True)
+]
+
+#Now we need to loop through each page and create soup objects. From looking at the html on the first page, we know that the agency information is under a <li tag>, which is nested in the <ul tag>
+agencies = []
+for link in full_links:
+    response = requests.get(link)
+    soup = BeautifulSoup(response.content, 'html.parser')
+    ul_tag = soup.find('ul', class_='usa-list') 
+    if ul_tag:
+        li_tags = ul_tag.find_all('li')
+#Based on the hint and from examining the page more closely, we see that the <ul> tag has more than 1 <li> tags - we want the second one, as it holds the agency info
+        if len(li_tags) > 1:
+            agency_info = li_tags[1].get_text(strip=True)
+
+#Extracting the agency name from the quotes, appending it to previously created empty list
+            if 'Agency:' in agency_info:
+                agency_name = agency_info.split("Agency:")[1].strip().strip('"')
+                agencies.append(agency_name)
+
+#Print the number of agencies found
+print(len(agencies))
+
+#Adding agencies to the scraped data
+scraped_data['Agency'] = agencies
+
+#Printing head
+print(scraped_data.head())
+
+#Source: ChatGPT for help determining how to find information on the second li tag on a page, for understanding how to store agency names in a list and why that is necessary.
 ```
 
 ## Step 2: Making the scraper dynamic
