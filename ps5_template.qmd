@@ -29,7 +29,7 @@ output:
     - Partner 1: Mithila Iyer (CNET ID: 12414493)
     - Partner 2: Sumner Perera (CNET ID: 12403312)
 3. Partner 1 will accept the `ps5` and then share the link it creates with their partner. You can only share it with one partner so you will not be able to change it after your partner has accepted. 
-4. "This submission is our work alone and complies with the 30538 integrity policy." Add your initials to indicate your agreement: \*\*\_\_\*\* \*\*\_\_\*\*
+4. "This submission is our work alone and complies with the 30538 integrity policy." Add your initials to indicate your agreement: \*\*\_\_\*\* SP
 5. "I have uploaded the names of anyone else other than my partner and I worked with on the problem set **[here](https://docs.google.com/forms/d/185usrCREQaUbvAXpWhChkjghdGgmAZXA3lPWpXLLsts/edit)**"  (1 point)
 6. Late coins used this pset: \*\*\_\_\*\* Late coins left after submission: \*\*\_\_\*\*
 7. Knit your `ps5.qmd` to an PDF file to make `ps5.pdf`, 
@@ -45,6 +45,7 @@ import pandas as pd
 import altair as alt
 import time
 from bs4 import BeautifulSoup
+import requests
 
 import warnings 
 warnings.filterwarnings('ignore')
@@ -182,12 +183,81 @@ print(scraped_data.head())
 
 * a. Pseudo-Code (PARTNER 2)
 
+1. Create a date checker function
+    1.1 Ask user for a month and a day 
+    1.2 Check user input to make sure that it's >= 2013; if not then ask user to re-enter 
+2. Create a scraper 
+    2.1 Create an empty soup object for all the content on the page 
+    2.2 Extract date text for the dates on the page, checking along the way whether the date matches the condition. If it does, keep going but if it doesn't then stop scraping
+    2.3 If it continues, then go to the next page to continue scraping
+    2.4 For each date, pick the associated category
+3. Combine all the lists into a dataframe 
+
+For these functions, I will use for loops and while loops. 
 
 * b. Create Dynamic Scraper (PARTNER 2)
 
 ```{python}
+#Create the block of asking the user for a date 
+from datetime import datetime 
+
+#Create the function that checks the user date 
+def get_dates():
+    while True: 
+        user_says = input("Enter a date (MM-YY): ")
+
+        try:
+            user_date = datetime.strptime(user_says, "%m-%y")
+            if datetime(2013,1,1) <= user_date <= datetime.now():
+                return user_date
+            else:
+                print("Date must be after 01-2013 and before today.")
+        except ValueError:
+            print("Invalid date format. Please use MM-YY")
+        
+#Create the function that scrapes dates 
+def scrape_dates(user_date): 
+    url = "https://oig.hhs.gov/fraud/enforcement/?page="
+    page = 1 
+    dates = []
+
+    while True: 
+        current_url = f"{url}{page}"
+        response = requests.get(current_url)
+        soup = BeautifulSoup(response.content, "html.parser") 
+        print(current_url)
+
+        div_tags = soup.find_all('div', class_='font-body-sm margin-top-1')
+
+        for div in div_tags: 
+            date_text = div.find('span', class_='text-base-dark').get_text()
+            format_date = datetime.strptime(date_text, "%B %d, %Y")
+        
+        print(format_date)
+        print(user_date)
+        print(format_date <= user_date)
+
+        if format_date <= user_date: 
+            dates.append(format_date)
+            print(format_date)
+        else: 
+            break  
+
+        #Move to the next page with pause
+        page += 1
+        time.sleep(1)
+
+    return dates
+
+def main(): 
+    user_date = get_dates() 
+    scraped_dates = scrape_dates(user_date)
+    print(scraped_dates)
 
 ```
+
+
+
 
 * c. Test Partner's Code (PARTNER 1)
 
