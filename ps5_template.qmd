@@ -227,21 +227,21 @@ def scrape_dates(user_date):
         soup = BeautifulSoup(response.content, "html.parser") 
         print(current_url)
 
-        div_tags = soup.find_all('div', class_='font-body-sm margin-top-1')
+        span_tags = soup.find_all("span", class_="text-base-dark padding-right-105")
 
-        for div in div_tags: 
-            date_text = div.find('span', class_='text-base-dark').get_text()
+        if not soup: 
+            break 
+
+        for span in span_tags: 
+            date_text = span.get_text(strip=True)
             format_date = datetime.strptime(date_text, "%B %d, %Y")
-        
-        print(format_date)
-        print(user_date)
-        print(format_date <= user_date)
-
-        if format_date <= user_date: 
-            dates.append(format_date)
             print(format_date)
-        else: 
-            break  
+            print(user_date)
+
+            if format_date >= user_date: 
+                dates.append(format_date)
+            else:
+                return dates 
 
         #Move to the next page with pause
         page += 1
