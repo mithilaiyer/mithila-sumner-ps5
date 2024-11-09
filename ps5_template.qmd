@@ -188,12 +188,12 @@ print(scraped_data.head())
     1.2 Check user input to make sure that it's >= 2013; if not then ask user to re-enter 
 2. Create a scraper 
     2.1 Create an empty soup object for all the content on the page 
-    2.2 Extract date text for the dates on the page, checking along the way whether the date matches the condition. If it does, keep going but if it doesn't then stop scraping
-    2.3 If it continues, then go to the next page to continue scraping
-    2.4 For each date, pick the associated category
+    2.2 Extract date text for the dates on the page, checking along the way whether the date matches the condition. If it does, keep going to the next page but if it doesn't then stop scraping.
+    2.3 Get the size of this date list and then pull the same number of objects from the soup objects for the title, category, and the link 
+    2.4 For each link gathered, grab the agency 
 3. Combine all the lists into a dataframe 
 
-For these functions, I will use for loops and while loops. 
+To build this, I will use a while loop and smaller for loops. 
 
 * b. Create Dynamic Scraper (PARTNER 2)
 
@@ -214,7 +214,25 @@ def get_dates():
                 print("Date must be after 01-2013 and before today.")
         except ValueError:
             print("Invalid date format. Please use MM-YY")
-        
+
+def scrape_agency(link):
+    try: 
+        response = requests.get(link)
+        soup = BeautifulSoup(response.content, 'html.parser')
+        ul_tag = soup.find('ul', class_='usa-list') 
+    
+        if ul_tag:
+            li_tags = ul_tag.find_all('li')
+            if len(li_tags) > 1:
+                agency_info = li_tags[1].get_text(strip=True)
+                if 'Agency:' in agency_info:
+                    agency_name = agency_info.split("Agency:")[1].strip().strip('"')
+                    return agency_name
+        return ""
+    except requests.exceptions.RequestException as e:
+        print(f"Error scraping {link}: {e}")
+        return ""
+
 #Create the function that scrapes 
 def scraper(user_date): 
     url = "https://oig.hhs.gov/fraud/enforcement/?page="
@@ -224,114 +242,118 @@ def scraper(user_date):
     category = []
     links = []
     agency = []
-    count = 0
     
     while True: 
         current_url = f"{url}{page}"
         response = requests.get(current_url)
         soup = BeautifulSoup(response.content, "html.parser") 
 
+        #Find tags on the current page 
         span_tags = soup.find_all("span", class_="text-base-dark padding-right-105")
         h2_tags = soup.find_all('h2', class_='usa-card__heading')
         ul_tags = soup.find_all('ul', class_='display-inline add-list-reset')
 
         #If there are no more pages 
-        if not soup: 
+        if not span_tags and not h2_tags: 
+            print(f"Stopping. No more data on page {page}.")
             break 
 
         #Scrape the dates 
+        date_found = False
         for span in span_tags: 
             date_text = span.get_text(strip=True)
             format_date = datetime.strptime(date_text, "%B %d, %Y")
 
             if format_date >= user_date: 
                 dates.append(format_date)
+                date_found = True 
             else:
+                print(f"Date is older, stopping.")
                 break 
 
-        #Scrape the titles 
+        #If no valid date is found 
+        if not date_found: 
+            break
+
+        #Scrape the titles
         for h2 in h2_tags:
             for a_tag in h2.find_all('a', href=True):
                 if a_tag["href"].startswith("/"): 
                     title_text = a_tag.get_text(strip=True)
                     titles.append(title_text)
-                    count += 1
-                if count >= len(dates): 
+                if len(titles) >= len(dates): 
                     break 
-            if count >= len(dates): 
+            if len(titles) >= len(dates): 
                 break
-        
-        count = 0
-
-        #Scrape the categories 
-        for ul in ul_tags:
-            for li in ul.find_all('li', class_='usa-tag'):
-                category_text = li.get_text(strip=True)
-                category.append(category_text)
-                count += 1
-                if count >= len(dates): 
-                    break 
-            if count >= len(dates): 
-                break
-        
-        count = 0 
 
         #Scrape the full links 
         for h2 in h2_tags:
             for a_tag in h2.find_all('a', href=True):
                 full_link = urljoin(base_url, a_tag['href'])
                 links.append(full_link)
-                count += 1
-                if count >= len(dates): 
+                if len(links) >= len(dates): 
                     break 
-            if count >= len(dates): 
+            if len(links) >= len(dates): 
+                break
+
+        #Scrape the categories 
+        for ul in ul_tags:
+            for li in ul.find_all('li', class_='usa-tag'):
+                category_text = li.get_text(strip=True)
+                category.append(category_text)
+                if len(category) >= len(dates): 
+                    break 
+            if len(category) >= len(dates): 
+                break   
+
+        #Now scrape agency info
+        for link in links:
+            agency_name = scrape_agency(link)
+            agency.append(agency_name)
+            if len(agency) >= len(links):
                 break
 
         #Move to the next page with pause
         page += 1
+        print(f"Moving to page {page}...")
         time.sleep(1)
 
-        #Scrape the agency values from the drawn links
-        for lk in links:
-            response = requests.get(lk)
-            soup = BeautifulSoup(response.content, 'html.parser')
-            ul_tag = soup.find('ul', class_='usa-list') 
-            if ul_tag:
-                li_tags = ul_tag.find_all('li')
-                if len(li_tags) > 1:
-                    agency_info = li_tags[1].get_text(strip=True)
-                    if 'Agency:' in agency_info:
-                        agency_name = agency_info.split("Agency:")[1].strip().strip('"')
-                        agency.append(agency_name)
+    #Create a dataframe 
+    scraped = {
+        "Dates" : dates,
+        "Titles": titles, 
+        "Category": category, 
+        "Links": links, 
+        "Agency": agency
+    }
 
-        #Create a dataframe 
-        scraped = {
-            "Dates" : dates,
-            "Titles": titles, 
-            "Category": category, 
-            "Links": links, 
-            "Agency": agency
-        }
-
-        scraped_df = pd.DataFrame(scraped)
-
-        #Save to a CSV file 
-        formatted_date_name = user_date.strftime("%y-%m")
-        file_name = f"enforcement_actions_{formatted_date_name}.csv" 
-        scraped_df.to_csv(file_name, index=False)
-
-        return scraped_df
+    scraped_df = pd.DataFrame(scraped)
+    print ("Scraping Complete.")
+    return 
 
 #Combine both functions into one single function 
-def main(): 
+def dynamic_scraper(): 
     user_date = get_dates() 
     all_scraped = scraper(user_date)
 
+    #Export to CSV 
+    formatted_date_name = user_date.strftime("%y-%m")   
+    file_name = f"enforcement_actions_{formatted_date_name}.csv"  
+    all_scraped.to_csv(file_name, index=False)
+
+    print(f"Data saved to {file_name}.") 
+    return all_scraped
+
+#Used ChatGPT to design and build this scraper, asking for troubleshooting and how to pull the same number of values from every subsequent soup object. 
+
 ```
+
 
 * c. Test Partner's Code (PARTNER 1)
 
 ```{python}
+#Get all the values since Jan 2023 (01-23)
+dynamic_scraper()
 
 ```
 
