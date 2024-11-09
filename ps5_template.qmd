@@ -136,40 +136,63 @@ print(scraped_data.head())
 ### 2. Crawling (PARTNER 1)
 
 ```{python}
-#First we need to get the list of relative links from the main page and store the content in a soup object 
+# URL of the first page
 main = 'https://oig.hhs.gov/fraud/enforcement/'
+
+# Send request to the main page
 response = requests.get(main)
 soup = BeautifulSoup(response.content, 'html.parser')
 
-#Extracting all the complete links
+# Extracting all the complete links from the first page
 full_links = [
-    urljoin(base_url, a_tag['href'])
+    urljoin(main, a_tag['href'])
     for h2 in soup.find_all('h2', class_='usa-card__heading')
     for a_tag in h2.find_all('a', href=True)
 ]
 
-#Now we need to loop through each page and create soup objects. From looking at the html on the first page, we know that the agency information is under a <li tag>, which is nested in the <ul tag>
+# Initialize an empty list to store agency names
 agencies = []
+
+# Scrape agency names from the first page's links
 for link in full_links:
+    # Get content from each individual page link
     response = requests.get(link)
     soup = BeautifulSoup(response.content, 'html.parser')
-    ul_tag = soup.find('ul', class_='usa-list') 
+    ul_tag = soup.find('ul', class_='usa-list')
+
+    # Default agency name to "MISSING" if not found
+    agency_name = "MISSING"
+
     if ul_tag:
         li_tags = ul_tag.find_all('li')
-#Based on the hint and from examining the page more closely, we see that the <ul> tag has more than 1 <li> tags - we want the second one, as it holds the agency info
+
+        # Extract the agency info from the second <li> tag (if available)
         if len(li_tags) > 1:
             agency_info = li_tags[1].get_text(strip=True)
 
-#Extracting the agency name from the quotes, appending it to previously created empty list
+            # If 'Agency:' is found in the agency_info, extract the agency name
             if 'Agency:' in agency_info:
                 agency_name = agency_info.split("Agency:")[1].strip().strip('"')
-                agencies.append(agency_name)
+
+    # Append the agency name (or "MISSING" if not found)
+    agencies.append(agency_name)
 
 #Print the number of agencies found
-print(len(agencies))
-
+print(agencies)
+#We see that some pages have agency info missing - that is okay, we are going to keep those in the agency column right now. However, let's clean up the 2nd entry before we add it to the scraped dataframe (we see that on the website, it adds the date before the agency name)
+def clean_agencies(agencies):
+    cleaned_list = []
+    for agency in agencies:
+        if ";" in agency:
+            cleaned_list.append(agency.split(";", 1)[1].strip())
+        else:
+            cleaned_list.append(agency)
+    return cleaned_list
+cleaned_agencies = clean_agencies(agencies)
+```
+``` {python} 
 #Adding agencies to the scraped data
-scraped_data['Agency'] = agencies
+scraped_data['Agency'] = cleaned_agencies
 
 #Printing head
 print(scraped_data.head())
@@ -384,6 +407,8 @@ dynamic_scraper()
 ### 1. Map by State (PARTNER 1)
 
 ```{python}
+import geopandas as gpd 
+import pandas as pd
 
 ```
 
@@ -398,15 +423,49 @@ dynamic_scraper()
 
 ### 1. Merge zip code shapefile with population
 ```{python}
+import os
+#Loading in shapefile from PSet4
+filepath = "/Users/mithilaiyer/Documents/GitHub/psetdata/shp/gz_2010_us_860_00_500k.shp" 
+pset4_geo = gpd.read_file(filepath)
+#Loading in zip-level population data
+path = "/Users/mithilaiyer/Documents/GitHub/pset5data/Pop_Data/DECENNIALDHC2020.P1-Data.csv"
+zip_pop_data = pd.read_csv(path, low_memory=False) 
+zip_pop_data.head()
 
+#Pre-merge cleaning: Deleting first row (var names), ensuring the ZCTA5 column only has numeric values, 
+
+zip_pop_data = zip_pop_data.drop(index=0).reset_index(drop=True) 
+zip_pop_data['NAME'] = zip_pop_data['NAME'].str.replace(r'ZCTA5\s*', '', regex=True)
+zip_pop_data['NAME'] = zip_pop_data['NAME'].str.lstrip()
+
+#Renaming some vars because they have similar names in geo + pop dataframes
+zip_pop_data.rename(columns={'NAME': 'zip_name'}, inplace=True)
+
+#Merging
+merged_data = pd.merge(pset4_geo, zip_pop_data, how='inner', left_on='ZCTA5', right_on='zip_name')
 ```
 
 ### 2. Conduct spatial join
 ```{python}
+#Loading in district shapefile
+filepath2 = "/Users/mithilaiyer/Documents/GitHub/pset5data/shp/geo_export_c69fb57e-ec8d-4c28-a5d7-89d59a407c76.shp" 
+district_shp = gpd.read_file(filepath2)
+
+#Conducting spatial join 
+joined_gdf = gpd.sjoin(merged_data, district_shp, how="inner", predicate="intersects")
+#Removing duplicates?
+new_data = joined_gdf.drop_duplicates(subset='geometry')
+new_data['P1_001N'] = pd.to_numeric(new_data['P1_001N'], errors='coerce')
+
+#Aggregating by population 
+aggregated = new_data.groupby('judicial_d')['P1_001N'].sum().reset_index()
+
 
 ```
 
 ### 3. Map the action ratio in each district
 ```{python}
+
+
 
 ```
