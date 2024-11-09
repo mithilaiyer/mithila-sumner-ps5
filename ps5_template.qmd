@@ -374,7 +374,7 @@ def dynamic_scraper():
 * c. Test Partner's Code (PARTNER 1)
 
 ```{python}
-#Get all the values since Jan 2023 (01-23)
+#Get all the values in the table
 dynamic_scraper()
 
 ```
@@ -384,6 +384,8 @@ dynamic_scraper()
 ### 1. Plot the number of enforcement actions over time (PARTNER 2)
 
 ```{python}
+
+
 
 ```
 
