@@ -352,7 +352,7 @@ def scraper(user_date):
 
     scraped_df = pd.DataFrame(scraped)
     print ("Scraping Complete.")
-    return 
+    return scraped_df
 
 #Combine both functions into one single function 
 def dynamic_scraper(): 
@@ -363,9 +363,8 @@ def dynamic_scraper():
     formatted_date_name = user_date.strftime("%y-%m")   
     file_name = f"enforcement_actions_{formatted_date_name}.csv"  
     all_scraped.to_csv(file_name, index=False)
-
-    print(f"Data saved to {file_name}.") 
-    return all_scraped
+    
+    return 
 
 #Used ChatGPT to design and build this scraper, asking for troubleshooting and how to pull the same number of values from every subsequent soup object. 
 
