@@ -303,7 +303,7 @@ def scraper(user_date):
                     if 'Agency:' in agency_info:
                         agency_name = agency_info.split("Agency:")[1].strip().strip('"')
                         agency.append(agency_name)
-                        
+
         #Create a dataframe 
         scraped = {
             "Dates" : dates,
@@ -328,9 +328,6 @@ def main():
     all_scraped = scraper(user_date)
 
 ```
-
-
-
 
 * c. Test Partner's Code (PARTNER 1)
 
