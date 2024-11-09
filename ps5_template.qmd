@@ -215,44 +215,117 @@ def get_dates():
         except ValueError:
             print("Invalid date format. Please use MM-YY")
         
-#Create the function that scrapes dates 
-def scrape_dates(user_date): 
+#Create the function that scrapes 
+def scraper(user_date): 
     url = "https://oig.hhs.gov/fraud/enforcement/?page="
     page = 1 
     dates = []
-
+    titles = []
+    category = []
+    links = []
+    agency = []
+    count = 0
+    
     while True: 
         current_url = f"{url}{page}"
         response = requests.get(current_url)
         soup = BeautifulSoup(response.content, "html.parser") 
-        print(current_url)
 
         span_tags = soup.find_all("span", class_="text-base-dark padding-right-105")
+        h2_tags = soup.find_all('h2', class_='usa-card__heading')
+        ul_tags = soup.find_all('ul', class_='display-inline add-list-reset')
 
+        #If there are no more pages 
         if not soup: 
             break 
 
+        #Scrape the dates 
         for span in span_tags: 
             date_text = span.get_text(strip=True)
             format_date = datetime.strptime(date_text, "%B %d, %Y")
-            print(format_date)
-            print(user_date)
 
             if format_date >= user_date: 
                 dates.append(format_date)
             else:
-                return dates 
+                break 
+
+        #Scrape the titles 
+        for h2 in h2_tags:
+            for a_tag in h2.find_all('a', href=True):
+                if a_tag["href"].startswith("/"): 
+                    title_text = a_tag.get_text(strip=True)
+                    titles.append(title_text)
+                    count += 1
+                if count >= len(dates): 
+                    break 
+            if count >= len(dates): 
+                break
+        
+        count = 0
+
+        #Scrape the categories 
+        for ul in ul_tags:
+            for li in ul.find_all('li', class_='usa-tag'):
+                category_text = li.get_text(strip=True)
+                category.append(category_text)
+                count += 1
+                if count >= len(dates): 
+                    break 
+            if count >= len(dates): 
+                break
+        
+        count = 0 
+
+        #Scrape the full links 
+        for h2 in h2_tags:
+            for a_tag in h2.find_all('a', href=True):
+                full_link = urljoin(base_url, a_tag['href'])
+                links.append(full_link)
+                count += 1
+                if count >= len(dates): 
+                    break 
+            if count >= len(dates): 
+                break
 
         #Move to the next page with pause
         page += 1
         time.sleep(1)
 
-    return dates
+        #Scrape the agency values from the drawn links
+        for lk in links:
+            response = requests.get(lk)
+            soup = BeautifulSoup(response.content, 'html.parser')
+            ul_tag = soup.find('ul', class_='usa-list') 
+            if ul_tag:
+                li_tags = ul_tag.find_all('li')
+                if len(li_tags) > 1:
+                    agency_info = li_tags[1].get_text(strip=True)
+                    if 'Agency:' in agency_info:
+                        agency_name = agency_info.split("Agency:")[1].strip().strip('"')
+                        agency.append(agency_name)
+                        
+        #Create a dataframe 
+        scraped = {
+            "Dates" : dates,
+            "Titles": titles, 
+            "Category": category, 
+            "Links": links, 
+            "Agency": agency
+        }
 
+        scraped_df = pd.DataFrame(scraped)
+
+        #Save to a CSV file 
+        formatted_date_name = user_date.strftime("%y-%m")
+        file_name = f"enforcement_actions_{formatted_date_name}.csv" 
+        scraped_df.to_csv(file_name, index=False)
+
+        return scraped_df
+
+#Combine both functions into one single function 
 def main(): 
     user_date = get_dates() 
-    scraped_dates = scrape_dates(user_date)
-    print(scraped_dates)
+    all_scraped = scraper(user_date)
 
 ```
 
